@@ -1,0 +1,81 @@
+---
+- name: Ensure 'man' directory exists.
+  file:  # noqa 208
+    path: /usr/share/man/man1
+    state: directory
+    mode: 0755
+    recurse: true
+  when:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_distribution_major_version | int >= 18
+
+- name: Add RabbitMQ Erlang repository
+  apt_repository:
+    repo: "ppa:rabbitmq/rabbitmq-erlang"
+    state: present
+
+- name: Issue the following command to reload the local package database
+  apt:
+    name: "{{ erlang_packages }}"
+    state: present
+    update_cache: yes 
+
+- name: Download RabbitMQ package.
+  get_url:
+    url: "{{ rabbitmq_deb_url }}"
+    dest: "/tmp/{{ rabbitmq_deb }}"
+
+- name: Ensure RabbitMQ is installed.
+  apt:
+    deb: "/tmp/{{ rabbitmq_deb }}"
+    state: present
+
+- name: Create hosts file with template
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: adm
+    mode: '0644'
+
+- name: Fetch file from node01
+  fetch:
+    src: /var/lib/rabbitmq/.erlang.cookie
+    dest: /home/ubuntu/erlang_cookie
+    flat: yes
+  run_once: true
+  when: groups.rabbitmq.index(inventory_hostname) == 0
+
+- name: Copy file to all RabbitMQ nodes
+  copy:
+    src: /home/ubuntu/erlang_cookie
+    dest: /var/lib/rabbitmq/.erlang.cookie
+    owner: rabbitmq
+    group: rabbitmq
+    mode: '0400'
+
+- name: Stop RabbitMQ app on all nodes
+  command: rabbitmqctl stop_app
+
+- name: Add nodes to cluster
+  command: rabbitmqctl join_cluster rabbit@{{ rabbitmq_cluster_master }}
+
+- name: Start RabbitMQ app
+  command: rabbitmqctl start_app
+
+- name: Add RabbitMQ user
+  community.rabbitmq.rabbitmq_user:
+    user: "{{ rabbitmq_user }}"
+    password: "{{ rabbitmq_password }}"
+    permissions:
+      - vhost: /
+        configure_priv: .*
+        read_priv: .*
+        write_priv: .*
+    state: present
+    tags: administrator 
+
+- name: Enables the rabbitmq_management plugin
+  community.rabbitmq.rabbitmq_plugin:
+    names: rabbitmq_management
+    state: enabled
