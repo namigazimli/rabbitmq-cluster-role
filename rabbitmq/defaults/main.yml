@@ -3,7 +3,7 @@ rabbitmq_daemon: rabbitmq-server
 rabbitmq_state: started
 rabbitmq_enabled: true
 
-rabbitmq_version: "3.9.19"
+rabbitmq_version: "4.2.3"
 rabbitmq_cluster_master: "{{ hostvars['rabbitmq01']['ansible_facts']['hostname'] }}"
 
 rabbitmq_rpm: "rabbitmq-server-{{ rabbitmq_version }}-1.el{{ ansible_distribution_major_version }}.noarch.rpm"
